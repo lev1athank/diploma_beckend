@@ -1,0 +1,15 @@
+# Для Node.js / React
+node_modules/
+dist/
+
+# Для Python
+__pycache__/
+.venv/
+venv/
+
+# Секреты
+.env
+.env.local
+
+# Системные файлы
+.DS_Store

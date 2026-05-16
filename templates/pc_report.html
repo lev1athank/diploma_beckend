@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Общие настройки страницы */
+        @page { 
+            size: A4; 
+            margin: 0; 
+        }
+        body { 
+            /* Используем Arial или Verdana — они почти везде понимают русский */
+            font-family: "Arial", "Verdana", sans-serif; 
+            background-color: #141517; 
+            color: #ffffff; 
+            margin: 0; 
+            padding: 0;
+        }
+
+        /* Синяя шапка */
+        .header { 
+            background-color: #2563eb; 
+            padding: 30px; 
+            text-align: center;
+        }
+        .header h1 { 
+            margin: 0; 
+            font-size: 20pt; 
+            letter-spacing: 2px;
+        }
+
+        .container { 
+            padding: 20px; 
+        }
+
+        /* Карточка компонента */
+        .component-card {
+            background-color: #1e2023;
+            border: 1px solid #334155;
+            border-left: 6px solid #2563eb;
+            margin-bottom: 15px;
+            padding: 15px;
+        }
+
+        .component-type {
+            color: #60a5fa;
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .component-name {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* Сетка характеристик */
+        .specs-list {
+            font-size: 9pt;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .spec-tag {
+            display: inline-block;
+            background: #2d3748;
+            padding: 2px 8px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            border-radius: 3px;
+        }
+
+        /* Итоговый блок */
+        .footer {
+            background-color: #1e2023;
+            margin: 20px;
+            padding: 20px;
+            border-top: 2px solid #2563eb;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>КОНФИГУРАЦИЯ СБОРКИ</h1>
+    </div>
+
+    <div class="container">
+        {% for item in components %}
+        <div class="component-card">
+            <div class="component-type">{{ item.type }}</div>
+            <div class="component-name">{{ item.name }}</div>
+            <div class="specs-list">
+                {% if item.specifications %}
+                    {% for key, value in item.specifications.items() %}
+                        <span class="spec-tag"><strong>{{ key }}:</strong> {{ value }}</span>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="footer">
+        <div style="color: #60a5fa; font-size: 10pt;">ОБЩЕЕ ПОТРЕБЛЕНИЕ</div>
+        <div style="font-size: 24pt; font-weight: bold;">{{ total_tdp }}W</div>
+    </div>
+</body>
+</html>
