@@ -1,110 +1,233 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        /* Общие настройки страницы */
-        @page { 
-            size: A4; 
-            margin: 0; 
-        }
-        body { 
-            /* Используем Arial или Verdana — они почти везде понимают русский */
-            font-family: "Arial", "Verdana", sans-serif; 
-            background-color: #141517; 
-            color: #ffffff; 
-            margin: 0; 
-            padding: 0;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Конфигурация сборки</title>
+  <style>
+    @font-face {
+      font-family: 'DejaVuSans';
+      src: local('DejaVu Sans');
+    }
 
-        /* Синяя шапка */
-        .header { 
-            background-color: #2563eb; 
-            padding: 30px; 
-            text-align: center;
-        }
-        .header h1 { 
-            margin: 0; 
-            font-size: 20pt; 
-            letter-spacing: 2px;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .container { 
-            padding: 20px; 
-        }
+    body {
+      background: #0f1117;
+      color: #f1f5f9;
+      font-family: 'DejaVu Sans', sans-serif;
+      font-size: 11px;
+      min-height: 100vh;
+      display: block;
+      padding: 20px;
+    }
 
-        /* Карточка компонента */
-        .component-card {
-            background-color: #1e2023;
-            border: 1px solid #334155;
-            border-left: 6px solid #2563eb;
-            margin-bottom: 15px;
-            padding: 15px;
-        }
+    .page {
+      width: 100%;
+      max-width: 720px;
+      background: #0f1117;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 0 auto;
+    }
 
-        .component-type {
-            color: #60a5fa;
-            font-size: 9pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
+    /* ── HEADER ── */
+    .header {
+      background: #1a2030;
+      border-bottom: 1px solid #1e2a3a;
+      padding: 14px 24px;
+      display: table;
+      width: 100%;
+    }
+    
+    .header-left { 
+      display: table-cell;
+      width: 50%;
+      vertical-align: top;
+    }
+    
+    .header-eyebrow {
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #60a5fa;
+      margin-bottom: 4px;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: #f1f5f9;
+      line-height: 1;
+    }
+    
+    .header-right { 
+      display: table-cell;
+      text-align: right;
+      width: 50%;
+      vertical-align: top;
+    }
+    
+    .header-tdp-label {
+      font-size: 8px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #60a5fa;
+      margin-bottom: 2px;
+    }
+    
+    .header-tdp-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: #f1f5f9;
+      line-height: 1;
+    }
+    
+    .header-tdp-unit { 
+      font-size: 11px; 
+      color: #60a5fa; 
+      font-weight: bold; 
+    }
+    
+    .header-tdp-sub { 
+      font-size: 8px; 
+      color: #334155; 
+      margin-top: 2px; 
+    }
 
-        .component-name {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
+    /* ── CARDS ── */
+    .container { 
+      padding: 12px; 
+      display: block;
+    }
 
-        /* Сетка характеристик */
-        .specs-list {
-            font-size: 9pt;
-            color: #94a3b8;
-            line-height: 1.4;
-        }
-        .spec-tag {
-            display: inline-block;
-            background: #2d3748;
-            padding: 2px 8px;
-            margin-right: 5px;
-            margin-bottom: 5px;
-            border-radius: 3px;
-        }
+    .card {
+      background: #161b27;
+      border: 1px solid #1e2a3a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
 
-        /* Итоговый блок */
-        .footer {
-            background-color: #1e2023;
-            margin: 20px;
-            padding: 20px;
-            border-top: 2px solid #2563eb;
-            text-align: right;
-        }
-    </style>
+    .card-header {
+      background: #1a2030;
+      border-bottom: 1px solid #1e2a3a;
+      padding: 10px 12px;
+      display: table;
+      width: 100%;
+    }
+    
+    .card-header-left { 
+      display: table-cell;
+      width: 70%;
+      vertical-align: top;
+    }
+    
+    .card-type {
+      font-size: 7px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #60a5fa;
+      margin-bottom: 2px;
+    }
+    
+    .card-name { 
+      font-size: 12px; 
+      font-weight: bold; 
+      color: #f1f5f9; 
+    }
+
+    .card-tdp { 
+      display: table-cell;
+      text-align: right;
+      width: 30%;
+      vertical-align: top;
+      padding-left: 10px;
+    }
+    
+    .card-tdp-num { 
+      font-size: 15px; 
+      font-weight: bold; 
+      color: #f1f5f9; 
+      line-height: 1; 
+    }
+    
+    .card-tdp-unit { 
+      font-size: 8px; 
+      color: #60a5fa; 
+      font-weight: bold; 
+    }
+    
+    .card-tdp-lbl { 
+      font-size: 6px; 
+      color: #4b6070; 
+      letter-spacing: 0.5px; 
+      text-transform: uppercase; 
+      margin-top: 1px; 
+    }
+
+    /* ── SPECS GRID ── */
+    .specs {
+      padding: 8px 10px;
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+    
+    .specs-row {
+      display: table-row;
+    }
+    
+    .spec {
+      display: table-cell;
+      background: #0b0d13;
+      border: 1px solid #1e2a3a;
+      border-radius: 3px;
+      padding: 6px 8px;
+      margin: 2px;
+      width: 33%;
+      vertical-align: top;
+    }
+    
+    .spec-k {
+      font-size: 6px;
+      color: #4b6070;
+      letter-spacing: 0px;
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 2px;
+      font-weight: bold;
+    }
+    
+    .spec-v {
+      font-size: 9px;
+      font-weight: bold;
+      color: #cbd5e1;
+      display: block;
+      line-height: 1.2;
+      word-wrap: break-word;
+    }
+  </style>
 </head>
 <body>
-    <div class="header">
-        <h1>КОНФИГУРАЦИЯ СБОРКИ</h1>
+<div class="page">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-eyebrow">Системная сборка</div>
+      <h1>КОНФИГУРАЦИЯ</h1>
     </div>
-
-    <div class="container">
-        {% for item in components %}
-        <div class="component-card">
-            <div class="component-type">{{ item.type }}</div>
-            <div class="component-name">{{ item.name }}</div>
-            <div class="specs-list">
-                {% if item.specifications %}
-                    {% for key, value in item.specifications.items() %}
-                        <span class="spec-tag"><strong>{{ key }}:</strong> {{ value }}</span>
-                    {% endfor %}
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
+    <div class="header-right">
+      <div class="header-tdp-label">Суммарное потребление</div>
+      <div><span class="header-tdp-val">{{ total_tdp }}</span><span class="header-tdp-unit"> W</span></div>
+      <div class="header-tdp-sub">{{ components_count }} компонент</div>
     </div>
-
-    <div class="footer">
-        <div style="color: #60a5fa; font-size: 10pt;">ОБЩЕЕ ПОТРЕБЛЕНИЕ</div>
-        <div style="font-size: 24pt; font-weight: bold;">{{ total_tdp }}W</div>
-    </div>
+  </div>
+  <div class="container">
+    {{ components_html | safe }}
+  </div>
+</div>
 </body>
 </html>

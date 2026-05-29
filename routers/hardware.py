@@ -112,57 +112,120 @@ async def get_hardware(
 
     category: Literal["cpus", "gpus", "mem", "motherboard"] = Path(..., description="Категория: cpus или gpus"),
 
-    search: str = Query(..., description="Поисковый запрос (название)"),
+    search: str = Query(..., description="Поисковые запросы (названия, через запятую)"),
     
     cpu_brand: Optional[str] = Query(None, description="Бренд процессора (опционально)"),
     
     gpu_brand: Optional[str] = Query(None, description="Бренд видеокарты (опционально)"),
+
+    cpu_socket: Optional[str] = Query(None, description="Сокет процессора (опционально)"),
     
     db: AsyncIOMotorDatabase = Depends(get_db)
 
 ):
 
-    formatted_query = format_search_query(search)
-
+    # Разбиваем несколько поисковых запросов (через запятую)
+    search_queries = [q.strip() for q in search.split(',') if q.strip()]
+    formatted_queries = [format_search_query(q) for q in search_queries]
     collection = db[category]
 
     
 
-    # 1. Сначала ищем в нашей MongoDB
+    # 1. Сначала ищем в нашей MongoDB с поддержкой множественных запросов
 
+    or_conditions = [{"slug": {"$regex": q}} for q in formatted_queries]
+    
+    # Всегда используем $or для поиска по любому из запросов
+    mongo_query = {"$and": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+    
+    # Для памяти и материнских плат также ищем по name
+    if category in ["mem", "motherboard"]:
+        mongo_query = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+    
     cached_data = await collection.find(
 
-        {"slug": {"$regex": formatted_query}}, 
+        mongo_query, 
 
         {"_id": 0}
 
-    ).to_list(length=10)
+    ).to_list(length=20)
+
+    print(cpu_socket)
+
+    # Фильтрация по бренду для процессоров
+    if category == "cpus" and cpu_brand:
+        normalized_brand = cpu_brand.lower()
+        cached_data = [
+            item for item in cached_data 
+            if normalized_brand in (item.get('slug', '') + item.get('name', '')).lower()
+        ]
+
+    # Фильтрация по бренду для видеокарт
+    if category == "gpus" and gpu_brand:
+        normalized_brand = gpu_brand.lower()
+        cached_data = [
+            item for item in cached_data 
+            if normalized_brand in (item.get('slug', '') + item.get('name', '')).lower()
+        ]
+
+    # Фильтрация по сокету для материнских плат
+    if category == "motherboard" and cpu_socket and cached_data:
+        # Нормализуем входящий сокет (убираем пробелы)
+        normalized_socket = cpu_socket.lower().replace(" ", "")
+        print(f"Нормализованный сокет для фильтрации: {normalized_socket}")
+        filtered_by_socket = [
+            item for item in cached_data 
+            if normalized_socket in str(item.get('specifications', {}).get('socket', '')).lower().replace(" ", "")
+        ]
+        # Если нашли материнские платы с нужным сокетом, используем отфильтрованные результаты
+        if filtered_by_socket:
+            cached_data = filtered_by_socket
+        else:
+            # Если по названию и сокету ничего не найдено, ищем ТОЛЬКО по сокету
+            all_by_socket = await collection.find(
+                {"specifications.socket": {"$regex": normalized_socket, "$options": "i"}},
+                {"_id": 0}
+            ).to_list(length=10)
+            if all_by_socket:
+                cached_data = all_by_socket
+            # Если и по сокету ничего не найдено, остаемся с результатами по названию
 
     
 
     # Если в базе уже есть 4 или более элементов, сразу отдаем их
 
-    if len(cached_data) >= 4:
+    if len(cached_data) >= 4 or category in ["mem", "motherboard"]:
 
         return {"source": "database", "data": cached_data}
 
     
 
-    # 2. Если в базе мало данных, делаем запрос к внешнему API за списком
+    # 2. Если в базе мало данных, делаем запросы к внешнему API за списком
 
     param_name = "name" if category == "cpus" else "name"
 
-    target_url = f"{EXTERNAL_API_URL}/{category}?limit=8&{param_name}={formatted_query}"
-
-    
+    external_data = []
 
     try:
 
-        response = await httpx_client.get(target_url)
-
-        response.raise_for_status()
-
-        external_data = response.json()
+        # Запрашиваем данные для каждого поискового запроса параллельно
+        api_tasks = [
+            httpx_client.get(f"{EXTERNAL_API_URL}/{category}?limit=8&{param_name}={q}")
+            for q in formatted_queries
+        ]
+        responses = await asyncio.gather(*api_tasks, return_exceptions=True)
+        
+        # Объединяем результаты от всех запросов
+        for response in responses:
+            if isinstance(response, Exception):
+                continue
+            try:
+                response.raise_for_status()
+                data = response.json()
+                if isinstance(data, list):
+                    external_data.extend(data)
+            except Exception:
+                continue
 
     except Exception:
 
@@ -241,7 +304,7 @@ async def get_hardware(
 
         "source": "live_parsed", 
 
-        "data": cached_data[:10]
+        "data": cached_data
 
     }
 
@@ -254,7 +317,7 @@ async def generate_pdf(data: List[ComponentPDF]):
         raise HTTPException(status_code=400, detail="Список компонентов пуст")
         
     data_dicts = [item.model_dump() for item in data]
-    
+    print("Полученные данные для PDF:", data_dicts)
     # Считаем суммарный TDP динамически
     total_tdp = 0
     for item in data_dicts:
