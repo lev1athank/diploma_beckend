@@ -13,3 +13,5 @@ venv/
 
 # Системные файлы
 .DS_Store
+
+test.py
