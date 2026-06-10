@@ -6,16 +6,14 @@ from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bs4 import BeautifulSoup
 import httpx
-
+from pdf_generator import generate_config_pdf
 # Подключение клиента Elasticsearch
 from elasticsearch import AsyncElasticsearch
 
 # Подключение твоих модулей бэкенда
 from database import get_db 
-from pdf_generator import PDFGenerator
 
 router = APIRouter(prefix="/hardware", tags=["Hardware"])
-pdf_gen = PDFGenerator()
 
 # 1. Инициализация асинхронного клиента Elasticsearch
 es_client = AsyncElasticsearch("http://localhost:9200")
@@ -265,27 +263,10 @@ async def get_hardware(
     # 4. Фоллбек на внешнее API (только если search был передан, но в базе пусто)
     # [Весь твой остальной оригинальный код работы с внешним httpx_client...]
 @router.post("/generate-pdf")
-async def generate_pdf(data: List[ComponentPDF]):
-    """
-    Эндпоинт генерации PDF-отчета
-    """
-    if not data:
-        raise HTTPException(status_code=400, detail="Список компонентов пуст")
-        
-    data_dicts = [item.model_dump() for item in data]
-    total_tdp = 0
-    for item in data_dicts:
-        specs = item.get('specifications') or {}
-        tdp_val = str(specs.get('tdp') or specs.get('TDP') or '0')
-        clean_tdp = "".join(filter(str.isdigit, tdp_val))
-        total_tdp += int(clean_tdp) if clean_tdp else 0
-    
-    try:
-        pdf_bytes = pdf_gen.generate_report(data_dicts, total_tdp)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=pc_build_report.pdf"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
+def hardware_generate_pdf(components: list[ComponentPDF]):
+    pdf_bytes = generate_config_pdf(components)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=config.pdf"},
+    )

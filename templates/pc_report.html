@@ -5,17 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Конфигурация сборки</title>
   <style>
-    @font-face {
-      font-family: 'DejaVuSans';
-      src: local('DejaVu Sans');
-    }
-
+    {{ font_css | safe }}
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: #0f1117;
       color: #f1f5f9;
-      font-family: 'DejaVu Sans', sans-serif;
+      font-family: 'Google Sans', Arial, sans-serif;
       font-size: 11px;
       min-height: 100vh;
       display: block;

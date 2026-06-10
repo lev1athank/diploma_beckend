@@ -1,161 +1,173 @@
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+)
 import os
-import logging
-from jinja2 import Environment, FileSystemLoader
-from xhtml2pdf import pisa
-import io
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+# ── Переводы характеристик ──────────────────────────────────────────────────
 
-class PDFGenerator:
-    def __init__(self):
-        # Указываем путь к папке с шаблонами
-        template_dir = os.path.join(os.path.dirname(__file__), "templates")
-        self.env = Environment(loader=FileSystemLoader(template_dir))
-        logger.info(f"Template directory: {template_dir}")
+COMPONENT_NAMES = {
+    "cpu": "Процессор",
+    "gpu": "Видеокарта",
+    "motherboard": "Материнская плата",
+    "mem": "Оперативная память",
+}
 
-    def parse_tdp(self, raw):
-        """Парсит TDP из строки"""
-        if not raw:
-            return None
-        n = int("".join(filter(str.isdigit, str(raw))))
-        return n if n > 0 else None
+# Только нужные поля + их русские названия, по типу компонента
+SPEC_FIELDS: dict[str, list[tuple[str, str]]] = {
+    "cpu": [
+        ("clock_speed",       "Базовая частота"),
+        ("turbo_speed",       "Турбо частота"),
+        ("cores",             "Ядра"),
+        ("threads",           "Потоки"),
+        ("socket",            "Сокет"),
+        ("tdp",               "TDP"),
+        ("memory_type",       "Тип памяти"),
+        ("max_memory",        "Макс. объём памяти"),
+        ("l3_cache",          "Кэш L3"),
+    ],
+    "gpu": [
+        ("core_clock",        "Базовая частота"),
+        ("boost_clock",       "Буст частота"),
+        ("memory_type",       "Тип памяти"),
+        ("memory_size",       "Объём памяти"),
+        ("tdp",               "TDP"),
+        ("floating_point_performance", "Производительность"),
+        ("directx_support",   "DirectX"),
+        ("pcie_revision",     "PCIe версия"),
+    ],
+    "motherboard": [
+        ("socket",            "Сокет"),
+        ("form_factor",       "Форм-фактор"),
+        ("max_memory",        "Макс. объём памяти"),
+        ("memory_slots",      "Слоты памяти"),
+        ("color",             "Цвет"),
+    ],
+    "mem": [
+        ("modules",           "Модули"),
+        ("speed",             "Частота"),
+        ("cas_latency",       "CAS Latency"),
+        ("first_word_latency","Задержка (нс)"),
+        ("color",             "Цвет"),
+    ],
+}
 
-    def format_value(self, key, val):
-        """Форматирует значение для отображения"""
-        if isinstance(val, list):
-            if key == 'modules':
-                return f"{val[0]} × {val[1]} GB"
-            if key == 'speed':
-                return f"DDR{val[0]}-{val[1]}"
-            return " × ".join(str(v) for v in val)
-        if key == 'price':
-            return f"${float(val):.2f}"
-        if key == 'has_unlocked_multiplier':
-            return 'Да' if str(val).lower() in ['yes', 'true', '1'] else 'Нет'
-        return str(val)
 
-    def get_translations(self):
-        return {
-            'clock_speed': 'Базовая частота',
-            'turbo_speed': 'Турбо частота',
-            'cores': 'Ядра',
-            'threads': 'Потоки',
-            'l3_cache': 'Кэш L3',
-            'socket': 'Сокет',
-            'memory_type': 'Тип памяти',
-            'family': 'Семейство',
-            'has_unlocked_multiplier': 'Разгон',
-            'boost_clock': 'Буст частота',
-            'core_clock': 'Базовая частота',
-            'bus_width': 'Шина памяти',
-            'memory_bandwidth': 'Пропускная способность',
-            'shading_units': 'Шейдерные блоки',
-            'pcie_revision': 'PCI-E',
-            'directx_support': 'DirectX',
-            'cas_latency': 'CAS латентность',
-            'first_word_latency': 'Задержка (нс)',
-            'modules': 'Конфигурация',
-            'speed': 'Частота',
-            'price': 'Цена ($)',
-            'form_factor': 'Форм-фактор',
-            'max_memory': 'Макс. ОЗУ (GB)',
-            'memory_slots': 'Слотов ОЗУ',
-        }
+def _fmt_value(key: str, value) -> str:
+    """Приводим значения к читаемому виду."""
+    if value is None:
+        return "—"
+    if key == "modules" and isinstance(value, list) and len(value) == 2:
+        return f"{value[0]} × {value[1]} ГБ"
+    if key == "speed" and isinstance(value, list) and len(value) == 2:
+        return f"DDR{value[0]}-{value[1]}"
+    if key == "price" or key == "price_per_gb":
+        return f"${float(value):.2f}"
+    if key == "max_memory" and isinstance(value, (int, float)):
+        return f"{int(value)} ГБ"
+    return str(value)
 
-    def get_fields_for_type(self, component_type):
-        """Возвращает поля для каждого типа компонента"""
-        fields_map = {
-            'ПРОЦЕССОР': ['cores', 'threads', 'clock_speed', 'turbo_speed', 'l3_cache', 'socket', 'memory_type', 'has_unlocked_multiplier'],
-            'ВИДЕОКАРТА': ['core_clock', 'boost_clock', 'memory_type', 'bus_width', 'memory_bandwidth', 'shading_units', 'pcie_revision', 'directx_support'],
-            'ПАМЯТЬ': ['speed', 'modules', 'cas_latency', 'first_word_latency', 'price'],
-            'МАТ. ПЛАТА': ['socket', 'form_factor', 'memory_slots', 'max_memory', 'price'],
-        }
-        return fields_map.get(component_type.upper(), [])
 
-    def build_components_html(self, components):
-        """Строит HTML для компонентов"""
-        translations = self.get_translations()
-        html = ''
-        
-        for component in components:
-            comp_type = component.get('type', '').upper()
-            name = component.get('name', 'Unknown')
-            specs = component.get('specifications', {})
-            
-            # Парсим TDP
-            tdp = self.parse_tdp(specs.get('tdp'))
-            tdp_html = f'<div class="card-tdp"><div><span class="card-tdp-num">{tdp}</span><span class="card-tdp-unit"> W</span></div><div class="card-tdp-lbl">Потребление</div></div>' if tdp else ''
-            
-            # Получаем нужные поля
-            wanted_fields = self.get_fields_for_type(comp_type)
-            specs_html = ''
-            
-            for field_key in wanted_fields:
-                if field_key in specs and field_key != 'tdp':
-                    label = translations.get(field_key, field_key)
-                    value = self.format_value(field_key, specs[field_key])
-                    specs_html += f'''
-            <div class="spec">
-              <span class="spec-k">{label}</span>
-              <span class="spec-v">{value}</span>
-            </div>'''
-            
-            specs_block = f'<div class="specs">{specs_html}</div>' if specs_html else ''
-            
-            html += f'''
-      <div class="card">
-        <div class="card-header">
-          <div class="card-header-left">
-            <div class="card-type">{comp_type}</div>
-            <div class="card-name">{name}</div>
-          </div>
-          {tdp_html}
-        </div>
-        {specs_block}
-      </div>'''
-        
-        return html
+def generate_config_pdf(components: list) -> bytes:
+    """
+    Принимает список ComponentPDF и возвращает PDF в байтах.
+    Регистрирует кириллический шрифт — положи DejaVuSans.ttf рядом
+    или укажи абсолютный путь.
+    """
+    # Кириллический шрифт (положи файл шрифта в папку проекта)
 
-    def generate_report(self, data: list, total_tdp: int):
-        try:
-            logger.info(f"Received {len(data)} components for PDF generation")
-            
-            # Строим HTML для компонентов на Python
-            components_html = self.build_components_html(data)
-            
-            # Загружаем шаблон
-            template = self.env.get_template("pc_report.html")
-            logger.info("Template loaded successfully")
-            
-            # Рендерим с готовым HTML
-            html_out = template.render(
-                components_html=components_html,
-                total_tdp=total_tdp,
-                components_count=len(data)
-            )
-            logger.info(f"HTML rendered, length: {len(html_out)} characters")
-            
-            # Кодируем в UTF-8 для xhtml2pdf
-            html_out_bytes = html_out.encode('utf-8')
+    FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+    pdfmetrics.registerFont(TTFont("DejaVu",      f"{FONT_DIR}/GoogleSans-Regular.ttf"))
+    pdfmetrics.registerFont(TTFont("DejaVu-Bold", f"{FONT_DIR}/GoogleSans-Bold.ttf"))
+    pdfmetrics.registerFont(TTFont("DV-Mono", f"{FONT_DIR}/Roboto-Regular.ttf"))  # моно = Roboto
+    pdfmetrics.registerFontFamily("DV", normal="DV", bold="DV-Bold")
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+    )
 
-            result = io.BytesIO()
-            # Конвертируем HTML в PDF с явным указанием кодировки
-            pisa_status = pisa.CreatePDF(
-                html_out_bytes,
-                dest=result,
-                encoding='UTF-8'
-            )
-            
-            if pisa_status.err:
-                logger.error(f"xhtml2pdf conversion error: {pisa_status.err}")
-                raise Exception(f"PDF conversion failed: {pisa_status.err}")
-            
-            logger.info(f"PDF created successfully, size: {len(result.getvalue())} bytes")
-            return result.getvalue()
-        
-        except Exception as e:
-            logger.error(f"Error in generate_report: {str(e)}", exc_info=True)
-            raise
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "DocTitle",
+        fontName="DejaVu-Bold",
+        fontSize=16,
+        spaceAfter=6,
+        textColor=colors.HexColor("#1a1a2e"),
+    )
+    section_style = ParagraphStyle(
+        "SectionHeader",
+        fontName="DejaVu-Bold",
+        fontSize=12,
+        spaceBefore=10,
+        spaceAfter=4,
+        textColor=colors.HexColor("#16213e"),
+    )
+    cell_style = ParagraphStyle(
+        "Cell",
+        fontName="DejaVu",
+        fontSize=9,
+    )
 
-        return result.getvalue()
+    story = []
+
+    # Заголовок документа
+    story.append(Paragraph("Конфигурация ПК", title_style))
+    story.append(HRFlowable(width="100%", thickness=1.5,
+                            color=colors.HexColor("#0f3460"), spaceAfter=10))
+
+    for comp in components:
+        comp_type = comp.type
+        label = COMPONENT_NAMES.get(comp_type, comp_type.upper())
+
+        # Заголовок секции
+        story.append(Paragraph(f"{label}: {comp.name}", section_style))
+
+        fields = SPEC_FIELDS.get(comp_type, [])
+        if not fields:
+            story.append(Paragraph("Нет данных", cell_style))
+            story.append(Spacer(1, 6))
+            continue
+
+        table_data = []
+        for key, ru_label in fields:
+            raw = comp.specifications.get(key)
+            if raw is None:
+                continue
+            table_data.append([
+                Paragraph(ru_label, cell_style),
+                Paragraph(_fmt_value(key, raw), cell_style),
+            ])
+
+        if table_data:
+            col_widths = [80 * mm, 80 * mm]
+            tbl = Table(table_data, colWidths=col_widths, hAlign="LEFT")
+            tbl.setStyle(TableStyle([
+                # чётные/нечётные строки
+                ("ROWBACKGROUNDS", (0, 0), (-1, -1),
+                 [colors.HexColor("#f5f5f5"), colors.white]),
+                ("GRID",        (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+                ("FONTNAME",    (0, 0), (-1, -1), "DejaVu"),
+                ("FONTSIZE",    (0, 0), (-1, -1), 9),
+                ("TOPPADDING",  (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING",(0, 0), (-1, -1), 6),
+            ]))
+            story.append(tbl)
+
+        story.append(Spacer(1, 8))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
